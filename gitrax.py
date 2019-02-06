@@ -50,7 +50,7 @@ class GitLookup(object):
         results = {"info": instance}
         return results
 
-    def email_lookup(self, username, auth, isPrecise):
+    def email_lookup(self, username, auth, isPrecise, checkMatch):
         # set email list we append to
         email_list = []
         if auth:
@@ -81,21 +81,33 @@ class GitLookup(object):
                     # outer is a list
                     emails_checked = []
                     for event in json_data:
-                        for k, v in event.items():
-                            # find json containing emails
-                            if k == "payload":
-                                for sk, sv in v.items():
-                                    # within json is a list: commits
-                                    if sk == "commits":
-                                        # iterate list and pull emails
-                                        for item in sv:
-                                            email = item["author"]["email"]
-                                            if email in emails_checked:
-                                                continue
-                                            if isPrecise and not match_email(username, email):
-                                                continue
-                                            email_list.append(email)
-                                            emails_checked.append(email)
+                        if isPrecise:
+                            if event['type'] == 'PushEvent':
+                                commits_url = event['repo']['url'] + '/commits?author={}'
+                                commits_response = requests.get(commits_url.format(username))
+                                if commits_response.status_code == 200:
+                                    commits = commits_response.json()
+                                    for item in commits:
+                                        if not 'noreply' in item['commit']['author']['email']:
+                                            email_list.append(item['commit']['author']['email'])
+                                            results = {"email": email_list}
+                                            return results
+                        else:             
+                            for k, v in event.items():
+                                # find json containing emails
+                                if k == "payload":
+                                    for sk, sv in v.items():
+                                        # within json is a list: commits
+                                        if sk == "commits":
+                                            # iterate list and pull emails
+                                            for item in sv:
+                                                email = item["author"]["email"]
+                                                if email in emails_checked:
+                                                    continue
+                                                if checkMatch and not match_email(username, email):
+                                                    continue
+                                                email_list.append(email)
+                                                emails_checked.append(email)
                 else:
                     # exiting loop
                     count = count + 10
@@ -197,7 +209,7 @@ def match_email(username, email):
     username = username.lower()
     email = email.lower()
     handle = email.split('@')[0]
-    
+
     if handle in username:
         return True
 
@@ -221,9 +233,10 @@ def match_email(username, email):
 def parse_args():
     parser = argparse.ArgumentParser(description='Search GitHub for User data')
     # Add optional arguments to parser
-    parser.add_argument('-a', '--all', action="store_true", help='Gather all informaiton for GitHub username')
+    parser.add_argument('-a', '--all', action="store_true", help='Gather all information for GitHub username')
     parser.add_argument('-e', '--email', action="store_true", help='Find email(s) for GitHub username. This is the default lookup.')
-    parser.add_argument('-p', '--precise', action="store_true", help='Attempt to match emails to usernames and only return those that seem similar')
+    parser.add_argument('-p', '--precise', action="store_true", help='Search commits specifically by username and pull the first associated email address')
+    parser.add_argument('-m', '--match', action="store_true", help='Attempt to match email address found to username and list only those that look similar')
     parser.add_argument('-f', '--followers', action="store_true", help='List followers for GitHub username')
     parser.add_argument('-F', '--following', action="store_true", help='List following for GitHub username')
     parser.add_argument('-g', '--gists', action="store_true", help='List gists for GitHub username')

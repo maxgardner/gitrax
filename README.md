@@ -28,7 +28,8 @@ optional arguments:
   -h, --help            show this help message and exit
   -a, --all             Gather all informaiton for GitHub username
   -e, --email           Find email(s) for GitHub username. This is the default lookup.
-  -p, --precise         (For use with -e) Attempt to match emails to usernames and only return those that seem similar
+  -p, --precise         (Ignored without -e) Pull a single email associated to the first commit found for that username
+  -m, --match           (Ignored without -e) Attempt to match emails to usernames and return only those that are similar
   -f, --followers       List followers for GitHub username
   -F, --following       List following for GitHub username
   -g, --gists           List gists for GitHub username
@@ -59,3 +60,9 @@ $ python3 gitrax -a -t myuser:mypass username
 
 ## Email Results
 A quick note about email addresses found. The script first tries to directly grab the username's email address. If no authentication is passed or the value for email is `null`, the script then searches public events for a specific username. It grabs all emails found in the public events. While this will most likely capture the email tied to the username, it will also grab the emails of all authors that have contributed to the user's repos. If you need to dig into it a bit more, you can search the user's public events at `https://api.github.com/users/<insert username here>/events/public`
+
+## List Iteration
+You can check multiple usernames using the `search_list.sh` script. For parameters, it takes a file with a list of usernames, separated by a new line, as well as an auth token. It will output the results in a file called `output.txt`.
+```
+$ AUTH=<user>:<token> FILE=<path-to-input-file> ./search_list.sh
+```
