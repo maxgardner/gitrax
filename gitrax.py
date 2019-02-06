@@ -7,8 +7,9 @@ $ python3 gitrax -h
 """
 
 import argparse
-import requests
 import json
+import re
+import requests
 
 
 class GitLookup(object):
@@ -49,7 +50,7 @@ class GitLookup(object):
         results = {"info": instance}
         return results
 
-    def email_lookup(self, username, auth):
+    def email_lookup(self, username, auth, isPrecise):
         # set email list we append to
         email_list = []
         if auth:
@@ -61,7 +62,7 @@ class GitLookup(object):
                 # check if value for email, otherwise its null
                 if json_data['email']:
                     # append email to email list
-                    email_list.append(json_data['email'])
+                    email_list.append(json_data['email'] + ' **')
                     # make dict
                     results = {"email": email_list}
                     return results
@@ -78,6 +79,7 @@ class GitLookup(object):
                 # check page returned data, if not exit loop
                 if len(json_data) > 0:
                     # outer is a list
+                    emails_checked = []
                     for event in json_data:
                         for k, v in event.items():
                             # find json containing emails
@@ -88,7 +90,12 @@ class GitLookup(object):
                                         # iterate list and pull emails
                                         for item in sv:
                                             email = item["author"]["email"]
+                                            if email in emails_checked:
+                                                continue
+                                            if isPrecise and not match_email(username, email):
+                                                continue
                                             email_list.append(email)
+                                            emails_checked.append(email)
                 else:
                     # exiting loop
                     count = count + 10
@@ -183,12 +190,40 @@ class GitLookup(object):
         with open('{}.json'.format(username), 'w') as outfile:
             json.dump(json_data, outfile, indent=4, sort_keys=True)
 
+def match_email(username, email):
+    if 'noreply' in email or 'no.reply' in email:
+        return False
+
+    username = username.lower()
+    email = email.lower()
+    handle = email.split('@')[0]
+    
+    if handle in username:
+        return True
+
+    rx = re.compile(r"[0-9!#$%&'*+/=?^_`{|}~;]")
+    username = rx.sub('', username)
+    email = rx.sub('', email)
+    
+    if '.' in email:
+        emailSplit = email.split('.')
+        for word in emailSplit:
+            if len(word) >= 4 and word in username:
+                return True
+    if '-' in email:
+        emailSplit = email.split('-')
+        for word in emailSplit:
+            if len(word) >= 4 and word in username:
+                return True
+
+    return False
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Search GitHub for User data')
     # Add optional arguments to parser
     parser.add_argument('-a', '--all', action="store_true", help='Gather all informaiton for GitHub username')
     parser.add_argument('-e', '--email', action="store_true", help='Find email(s) for GitHub username. This is the default lookup.')
+    parser.add_argument('-p', '--precise', action="store_true", help='Attempt to match emails to usernames and only return those that seem similar')
     parser.add_argument('-f', '--followers', action="store_true", help='List followers for GitHub username')
     parser.add_argument('-F', '--following', action="store_true", help='List following for GitHub username')
     parser.add_argument('-g', '--gists', action="store_true", help='List gists for GitHub username')
@@ -227,7 +262,7 @@ def main(args):
         if myargs['info']:
             json_result.update(lookup.info_lookup(args.username, auth))
         if myargs['email']:
-            json_result.update(lookup.email_lookup(args.username, auth))
+            json_result.update(lookup.email_lookup(args.username, auth, myargs['precise']))
         if myargs['followers']:
             json_result.update(lookup.misc_lookup(args.username, auth, 'followers'))
         if myargs['following']:
@@ -250,12 +285,10 @@ def main(args):
         lookup.outfile_save(args.username, json_result)
 
     # print results to console
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    print("Searched Username: {}".format(args.username))
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
+    print("Username: {}".format(args.username))
     for lookup, result in json_result.items():
-        print("Section: {}".format(lookup.upper()))
+        print("\n{}".format(lookup.upper()))
         if lookup == 'info':
             for k, v in result.items():
                 print("{}: {}".format(k, v))
@@ -265,9 +298,11 @@ def main(args):
                     print("{}: {}".format(k, v))
                 print('\n')
         else:
+            if len(result) == 0:
+                print("None found")
+                return
             for item in result:
                 print(item)
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
 
 if __name__ == '__main__':

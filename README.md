@@ -28,6 +28,7 @@ optional arguments:
   -h, --help            show this help message and exit
   -a, --all             Gather all informaiton for GitHub username
   -e, --email           Find email(s) for GitHub username. This is the default lookup.
+  -p, --precise         (For use with -e) Attempt to match emails to usernames and only return those that seem similar
   -f, --followers       List followers for GitHub username
   -F, --following       List following for GitHub username
   -g, --gists           List gists for GitHub username
