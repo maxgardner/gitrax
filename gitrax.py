@@ -275,7 +275,7 @@ def main(args):
         if myargs['info']:
             json_result.update(lookup.info_lookup(args.username, auth))
         if myargs['email']:
-            json_result.update(lookup.email_lookup(args.username, auth, myargs['precise']))
+            json_result.update(lookup.email_lookup(args.username, auth, myargs['precise'], myargs['match']))
         if myargs['followers']:
             json_result.update(lookup.misc_lookup(args.username, auth, 'followers'))
         if myargs['following']:
