@@ -54,7 +54,7 @@ class GitLookup(object):
         # set email list we append to
         email_list = []
         if auth:
-            # we'll gry grabbing email directly first, with auth
+            # we'll try grabbing email directly first, with auth
             url = "https://api.github.com/users/{}"
             response = requests.get(url.format(username), auth=auth)
             if response.status_code == 200:
@@ -69,45 +69,59 @@ class GitLookup(object):
         # trying public events, no auth passed or null email value
         # set public events url
         events_url = "https://api.github.com/users/{}/events/public?page={}"
+        # for precision, pull repos and check public commits
+        repos_url = "https://api.github.com/users/{}/repos"
         # make request to github public events endpoint
         # endpoint supports pagination 0-9
         count = 0
         while count < 10:
+            # if precision flag passed, then look only at commits on public repos by GitHub username
+            if isPrecise:
+                response = requests.get(repos_url.format(username), auth=auth)
+                if response.status_code == 200:
+                    repos = response.json()
+                    if len(repos) > 0:
+                        for repo in repos:
+                            if repo['fork'] or repo['private']:
+                                continue
+                            commits_url = repo['url'] + '/commits?author={}'
+                            commits_response = requests.get(commits_url.format(username), auth=auth)
+                            if commits_response.status_code == 200:
+                                commits = commits_response.json()
+                                if len(commits) > 0:
+                                    for item in commits:
+                                        if not 'noreply' in item['commit']['author']['email']:
+                                            email_list.append(item['commit']['author']['email'])
+                                            break
+                                    if len(email_list) > 0:
+                                        results = {"email": email_list}
+                                        return results
+                        # if no email found and no match flag was passed, return nothing
+                        if not checkMatch:
+                            return
             response = requests.get(events_url.format(username, count), auth=auth)
             if response.status_code == 200:
                 json_data = response.json()
                 # check page returned data, if not exit loop
-                if len(json_data) > 0:
+                if len(json_data) > 0 and json_data is not None:
                     # outer is a list
                     emails_checked = []
                     for event in json_data:
-                        if isPrecise:
-                            if event['type'] == 'PushEvent':
-                                commits_url = event['repo']['url'] + '/commits?author={}'
-                                commits_response = requests.get(commits_url.format(username))
-                                if commits_response.status_code == 200:
-                                    commits = commits_response.json()
-                                    for item in commits:
-                                        if not 'noreply' in item['commit']['author']['email']:
-                                            email_list.append(item['commit']['author']['email'])
-                                            results = {"email": email_list}
-                                            return results
-                        else:             
-                            for k, v in event.items():
-                                # find json containing emails
-                                if k == "payload":
-                                    for sk, sv in v.items():
-                                        # within json is a list: commits
-                                        if sk == "commits":
-                                            # iterate list and pull emails
-                                            for item in sv:
-                                                email = item["author"]["email"]
-                                                if email in emails_checked:
-                                                    continue
-                                                if checkMatch and not match_email(username, email):
-                                                    continue
-                                                email_list.append(email)
-                                                emails_checked.append(email)
+                        for k, v in event.items():
+                            # find json containing emails
+                            if k == "payload":
+                                for sk, sv in v.items():
+                                    # within json is a list: commits
+                                    if sk == "commits":
+                                        # iterate list and pull emails
+                                        for item in sv:
+                                            email = item["author"]["email"]
+                                            if email in emails_checked:
+                                                continue
+                                            if checkMatch and not match_email(username, email):
+                                                continue
+                                            email_list.append(email)
+                                            emails_checked.append(email)
                 else:
                     # exiting loop
                     count = count + 10
@@ -220,12 +234,12 @@ def match_email(username, email):
     if '.' in email:
         emailSplit = email.split('.')
         for word in emailSplit:
-            if len(word) >= 4 and word in username:
+            if len(word) >= 3 and word in username:
                 return True
     if '-' in email:
         emailSplit = email.split('-')
         for word in emailSplit:
-            if len(word) >= 4 and word in username:
+            if len(word) >= 3 and word in username:
                 return True
 
     return False
@@ -235,7 +249,7 @@ def parse_args():
     # Add optional arguments to parser
     parser.add_argument('-a', '--all', action="store_true", help='Gather all information for GitHub username')
     parser.add_argument('-e', '--email', action="store_true", help='Find email(s) for GitHub username. This is the default lookup.')
-    parser.add_argument('-p', '--precise', action="store_true", help='Search commits specifically by username and pull the first associated email address')
+    parser.add_argument('-p', '--precise', action="store_true", help='Search commits specifically by username and pull the first associated email address; returns nothing if no commits can be accessed')
     parser.add_argument('-m', '--match', action="store_true", help='Attempt to match email address found to username and list only those that look similar')
     parser.add_argument('-f', '--followers', action="store_true", help='List followers for GitHub username')
     parser.add_argument('-F', '--following', action="store_true", help='List following for GitHub username')
@@ -292,14 +306,14 @@ def main(args):
             json_result.update(lookup.misc_lookup(args.username, auth, 'subscriptions'))
     if not json_result:
         # no flags passed, default to email lookup
-        json_result = lookup.email_lookup(args.username, auth)
+        json_result = lookup.email_lookup(args.username, auth, myargs['precise'], myargs['match'])
     if myargs['outfile']:
         # save output to file flag was passed.
         lookup.outfile_save(args.username, json_result)
 
     # print results to console
-    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
-    print("Username: {}".format(args.username))
+    print("\n------------------\n")
+    print("USER\n{}".format(args.username))
     for lookup, result in json_result.items():
         print("\n{}".format(lookup.upper()))
         if lookup == 'info':

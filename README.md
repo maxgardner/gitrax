@@ -28,8 +28,8 @@ optional arguments:
   -h, --help            show this help message and exit
   -a, --all             Gather all informaiton for GitHub username
   -e, --email           Find email(s) for GitHub username. This is the default lookup.
-  -p, --precise         (Ignored without -e) Pull a single email associated to the first commit found for that username
-  -m, --match           (Ignored without -e) Attempt to match emails to usernames and return only those that are similar
+  -p, --precise         (Ignored without -e) Return a single email only if it's tied to a commit associated with the username
+  -m, --match           (Ignored without -e) Return all emails found only if they are similar to the username (can be used with precise as a backup)
   -f, --followers       List followers for GitHub username
   -F, --following       List following for GitHub username
   -g, --gists           List gists for GitHub username

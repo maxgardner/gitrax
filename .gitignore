@@ -1,2 +1,6 @@
+# project-specific
 input/
 output*.txt
+
+# editor
+.vscode/
